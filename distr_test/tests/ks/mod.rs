@@ -60,6 +60,10 @@ fn kolmogorov_smirnov_statistic_continuous(ecdf: Ecdf, cdf: impl Fn(f64) -> f64)
         let (x_i, f_i) = step_points[i];
         let (_, f_i_1) = step_points[i - 1];
         let cdf_i = cdf(x_i);
+        assert!(
+            (0.0..=1.0).contains(&cdf_i),
+            "CDF must return a value in [0, 1], got {cdf_i} at x = {x_i}"
+        );
         let max_1 = (cdf_i - f_i).abs();
         let max_2 = (cdf_i - f_i_1).abs();
 
@@ -77,8 +81,14 @@ fn kolmogorov_smirnov_statistic_discrete(ecdf: Ecdf, cdf: impl Fn(i64) -> f64) -
     for i in 1..step_points.len() {
         let (x_i, f_i) = step_points[i];
         let (_, f_i_1) = step_points[i - 1];
-        let max_1 = (cdf(x_i as i64) - f_i).abs();
-        let max_2 = (cdf(x_i as i64 - 1) - f_i_1).abs(); // -1 is the same as -epsilon, because we have integer support
+        let cdf_i = cdf(x_i as i64);
+        let cdf_i_1 = cdf(x_i as i64 - 1); // -1 is the same as -epsilon, because we have integer support
+        assert!(
+            (0.0..=1.0).contains(&cdf_i) && (0.0..=1.0).contains(&cdf_i_1),
+            "CDF must return a value in [0, 1], got {cdf_i} and {cdf_i_1} at x = {x_i}"
+        );
+        let max_1 = (cdf_i - f_i).abs();
+        let max_2 = (cdf_i_1 - f_i_1).abs();
 
         max_diff = max_diff.max(max_1).max(max_2);
     }
