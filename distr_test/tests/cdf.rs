@@ -452,3 +452,53 @@ fn ln_factorial(n: u64) -> f64 {
 fn ln_binomial(n: u64, k: u64) -> f64 {
     ln_factorial(n) - ln_factorial(k) - ln_factorial(n - k)
 }
+
+#[test]
+fn inverse_gaussian() {
+    use core::f64::consts::FRAC_1_SQRT_2;
+    use rand_distr::InverseGaussian;
+    use special::Primitive;
+
+    // Scaled complementary error function `erfcx(z) = exp(z^2) * erfc(z)` for
+    // `z >= 0`. Computing `exp(z^2)` and `erfc(z)` separately overflows resp.
+    // underflows for large `z`, so fall back to the asymptotic expansion there.
+    fn erfcx(z: f64) -> f64 {
+        if z < 25.0 {
+            (z * z).exp() * z.erfc()
+        } else {
+            let t = 1.0 / (2.0 * z * z);
+            (1.0 - t * (1.0 - 3.0 * t * (1.0 - 5.0 * t))) / (z * core::f64::consts::PI.sqrt())
+        }
+    }
+
+    fn cdf(x: f64, mean: f64, shape: f64) -> f64 {
+        if x < 0.0 {
+            return 0.0;
+        }
+        let f = (shape / x).sqrt();
+        let a = f * (x / mean - 1.0);
+        let b = f * (x / mean + 1.0);
+        // F(x) = Phi(a) + exp(2*shape/mean) * Phi(-b). The second term is
+        // rewritten as 0.5 * exp(-a^2/2) * erfcx(b/sqrt(2)), which is
+        // mathematically equivalent but avoids `exp(2*shape/mean)` overflowing
+        // (and `Phi(-b)` underflowing) for large `shape/mean`.
+        let phi_a = 0.5 * (1.0 + (a * FRAC_1_SQRT_2).erf());
+        phi_a + 0.5 * (-0.5 * a * a).exp() * erfcx(b * FRAC_1_SQRT_2)
+    }
+
+    // mu, lambda
+    let parameters = [
+        (1.0, 1e-3),
+        (0.5, 1.0),
+        (1.0, 0.5),
+        (1.0, 1.0),
+        (1.0, 2.0),
+        (2.0, 1.0),
+        (1.0, 1e3),
+    ];
+
+    for (seed, (mean, shape)) in parameters.into_iter().enumerate() {
+        let dist = InverseGaussian::new(mean, shape).unwrap();
+        test_continuous(seed as u64, dist, |x| cdf(x, mean, shape));
+    }
+}
